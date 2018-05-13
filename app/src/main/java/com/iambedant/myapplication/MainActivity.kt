@@ -8,13 +8,14 @@ import android.util.Log
 import io.reactivex.disposables.Disposable
 import kotlinx.android.synthetic.main.activity_main.*
 import io.reactivex.subjects.PublishSubject
+import java.util.concurrent.TimeUnit
 
 
 class MainActivity : AppCompatActivity() {
     lateinit var disposable: Disposable
     private val dataSource: ArrayList<String> = ArrayList()
     lateinit var layoutManager: LinearLayoutManager
-    var subject = PublishSubject.create<Int>()
+    var subject = PublishSubject.create<List<Int>>()
 
     private var startTime: Long = 0
 
@@ -27,25 +28,41 @@ class MainActivity : AppCompatActivity() {
         loadData()
         recyclerView.adapter = RvAdapter(dataSource)
         setRecyclerViewScrollListener()
-        disposable = subject.distinctUntilChanged().subscribe { i -> Log.d("RV", " $i ") }
+
+        disposable = subject
+                .debounce(300, TimeUnit.MILLISECONDS)
+                .scan { t1: List<Int>, t2: List<Int> ->
+                    t2.filter { it > getInt(t1) }
+                }
+                .flatMapIterable { x -> x }
+                .subscribe({ i ->
+                    Log.d("RV", " $i ")
+                }, { t ->
+                    Log.e("RV_ERROR", t.localizedMessage)
+                })
+
 
         recyclerView.viewTreeObserver
                 .addOnGlobalLayoutListener {
                     if (!firstTrackFlag) {
                         startTime = System.currentTimeMillis()
-                        for (i in layoutManager.findFirstVisibleItemPosition()..layoutManager.findLastVisibleItemPosition()) {
-                            subject.onNext(i)
-                        }
+                        subject.onNext((layoutManager.findFirstVisibleItemPosition()..layoutManager.findLastVisibleItemPosition()).toList())
                         firstTrackFlag = true
                     }
                 }
     }
 
+    fun getInt(t1: List<Int>): Int {
+        return if (t1.isNotEmpty()) t1[t1.size - 1]
+        else 0
+    }
+
     private fun loadData() {
-        for (i in 0..10) {
+        for (i in 0..50) {
             dataSource.add("item no $i")
         }
     }
+
 
     private fun setRecyclerViewScrollListener() {
         recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -53,7 +70,7 @@ class MainActivity : AppCompatActivity() {
                 super.onScrollStateChanged(recyclerView, newState)
                 if (newState == RecyclerView.SCROLL_STATE_IDLE) {
                     for (i in layoutManager.findFirstVisibleItemPosition()..layoutManager.findLastVisibleItemPosition()) {
-                        subject.onNext(i)
+                        subject.onNext((layoutManager.findFirstVisibleItemPosition()..layoutManager.findLastVisibleItemPosition()).toList())
                     }
                 }
             }
