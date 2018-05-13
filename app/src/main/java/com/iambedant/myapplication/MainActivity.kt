@@ -8,13 +8,14 @@ import android.util.Log
 import io.reactivex.disposables.Disposable
 import kotlinx.android.synthetic.main.activity_main.*
 import io.reactivex.subjects.PublishSubject
+import java.util.concurrent.TimeUnit
 
 
 class MainActivity : AppCompatActivity() {
     lateinit var disposable: Disposable
     private val dataSource: ArrayList<String> = ArrayList()
     lateinit var layoutManager: LinearLayoutManager
-    var subject = PublishSubject.create<Int>()
+    var subject = PublishSubject.create<VisibleState>()
 
     private var startTime: Long = 0
 
@@ -27,15 +28,20 @@ class MainActivity : AppCompatActivity() {
         loadData()
         recyclerView.adapter = RvAdapter(dataSource)
         setRecyclerViewScrollListener()
-        disposable = subject.distinctUntilChanged().subscribe { i -> Log.d("RV", " $i ") }
+        disposable = subject
+                .distinctUntilChanged()
+                .throttleWithTimeout(300, TimeUnit.MILLISECONDS)
+                .scan { t1: VisibleState, t2: VisibleState ->  }
+                .subscribe { i ->
+                    for (a in i.start.. i.end)
+                    Log.d("RV", " $a ")
+                }
 
         recyclerView.viewTreeObserver
                 .addOnGlobalLayoutListener {
                     if (!firstTrackFlag) {
                         startTime = System.currentTimeMillis()
-                        for (i in layoutManager.findFirstVisibleItemPosition()..layoutManager.findLastVisibleItemPosition()) {
-                            subject.onNext(i)
-                        }
+                        subject.onNext(VisibleState(layoutManager.findFirstVisibleItemPosition(), layoutManager.findLastVisibleItemPosition()))
                         firstTrackFlag = true
                     }
                 }
@@ -51,11 +57,11 @@ class MainActivity : AppCompatActivity() {
         recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrollStateChanged(recyclerView: RecyclerView?, newState: Int) {
                 super.onScrollStateChanged(recyclerView, newState)
-                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
-                    for (i in layoutManager.findFirstVisibleItemPosition()..layoutManager.findLastVisibleItemPosition()) {
-                        subject.onNext(i)
-                    }
-                }
+                subject.onNext(VisibleState(layoutManager.findFirstVisibleItemPosition(), layoutManager.findLastVisibleItemPosition()))
+            }
+
+            override fun onScrolled(recyclerView: RecyclerView?, dx: Int, dy: Int) {
+                super.onScrolled(recyclerView, dx, dy)
             }
         })
     }
