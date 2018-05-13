@@ -6,7 +6,6 @@ import android.support.v7.widget.LinearLayoutManager
 import android.support.v7.widget.RecyclerView
 import android.util.Log
 import io.reactivex.disposables.Disposable
-import io.reactivex.functions.Predicate
 import kotlinx.android.synthetic.main.activity_main.*
 import io.reactivex.subjects.PublishSubject
 
@@ -19,7 +18,6 @@ class MainActivity : AppCompatActivity() {
     private val viewsViewed = java.util.ArrayList<Int>()
     private var startTime: Long = 0
     private var endTime: Long = 0
-
     private var firstTrackFlag = false
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,7 +27,12 @@ class MainActivity : AppCompatActivity() {
         loadData()
         recyclerView.adapter = RvAdapter(dataSource)
         setRecyclerViewScrollListener()
-        disposable = subject.distinctUntilChanged().filter { i -> i.time > 300 }.subscribe { i -> Log.d("RV", " $i ") }
+        disposable = subject
+                .distinctUntilChanged()
+                .filter { i -> i.time > 300 }
+                .subscribe { i ->
+                    Log.d("RV", " ${i.position} ")
+                }
 
         recyclerView.viewTreeObserver
                 .addOnGlobalLayoutListener {
@@ -41,8 +44,6 @@ class MainActivity : AppCompatActivity() {
                         firstTrackFlag = true
                     }
                 }
-
-
     }
 
     private fun loadData() {
@@ -58,7 +59,7 @@ class MainActivity : AppCompatActivity() {
                 if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
                     endTime = System.currentTimeMillis()
                     for (i in viewsViewed) {
-                        subject.onNext(ItemInfo(i, startTime - endTime))
+                        subject.onNext(ItemInfo(i, endTime - startTime))
                     }
                     viewsViewed.clear()
                 }
@@ -68,6 +69,8 @@ class MainActivity : AppCompatActivity() {
                         viewsViewed.add(i)
                     }
                 }
+
+
             }
         })
     }
